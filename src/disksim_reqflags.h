@@ -48,6 +48,8 @@
 #define DISKSIM_LOCAL		0x20000000
 #define DISKSIM_BATCH_COMPLETE  0x80000000
 
+// EUNJI: add trim event flag 
+#define DISKSIM_TRIM		0x00001000
 
 
 #endif // _DISKSIM_REQFLAGS_H

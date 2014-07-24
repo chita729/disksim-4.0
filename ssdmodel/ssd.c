@@ -711,6 +711,59 @@ static void ssd_reconnect_done (ioreq_event *curr)
    }
 }
 
+// EUNJI: "trim" command handling function 
+
+static int ssd_trim_page(ioreq_event* curr)
+{
+	ssd_t* currdisk = getssd(curr->devno); 	
+	int elem_num = currdisk->timing_t->choose_element(currdisk->timing_t, curr->blkno); 
+	ssd_element *elem = &currdisk->elements[elem_num];
+	ssd_element_metadata *metadata; 
+	int lpn;
+
+	metadata = &(currdisk->elements[elem_num].metadata);
+	lpn = ssd_logical_pageno(curr->blkno, currdisk);
+
+  // see if this logical page no is already mapped.
+  if (metadata->lba_table[lpn] != -1) {
+
+        // since the lpn is going to be written to a new location,
+        // its previous copy is invalid now. therefore reduce the block
+        // usage of the previous copy's block.
+
+        unsigned int prev_page = metadata->lba_table[lpn];
+        unsigned int prev_block = SSD_PAGE_TO_BLOCK(prev_page, currdisk);
+        unsigned int pagepos_in_prev_block = prev_page % currdisk->params.pages_per_block;
+        unsigned int prev_plane = metadata->block_usage[prev_block].plane_num;
+
+        if (metadata->block_usage[prev_block].page[pagepos_in_prev_block] != lpn) {
+            fprintf(stderr, "error: lpn %d not found in prev block %d pos %d\n",
+                lpn, prev_block, pagepos_in_prev_block);
+            assert(0);
+        } else {
+            metadata->block_usage[prev_block].page[pagepos_in_prev_block] = -1;
+            metadata->block_usage[prev_block].num_valid --;
+            metadata->plane_meta[prev_plane].valid_pages --;
+						metadata->lba_table[lpn] = -1;
+            ssd_assert_valid_pages(prev_plane, metadata, currdisk);
+        }
+    } else {
+		// printf("Page is already trimmed\n");
+    }
+
+		// release this event
+		addtoextraq((event*) curr);
+//		ssd_activate_elem(currdisk, elem_num);
+		io_done_notify(curr);
+
+    return metadata->lba_table[lpn];
+
+}
+
+
+
+
+
 static void ssd_request_arrive (ioreq_event *curr)
 {
    ssd_t *currdisk;
@@ -746,6 +799,9 @@ static void ssd_request_arrive (ioreq_event *curr)
               ssd_media_access_request (curr);
               ssd_check_channel_activity(currdisk);
           }
+      } else if (curr->flags & TRIM) {
+          ssd_trim_page(ioreq_copy(curr));
+		  ssd_request_complete(curr);
       } else {
          curr->cause = READY_TO_TRANSFER;
          curr->type = IO_INTERRUPT_ARRIVE;

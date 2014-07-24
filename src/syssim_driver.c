@@ -160,9 +160,11 @@ main(int argc, char *argv[])
   /* NOTE: it is bad to use this internal disksim call from external... */
   DISKSIM_srand48(1);
 
-  for (i=0; i < 1000; i++) {
+//  for (i=0; i < 1000; i++) {
+  for (i=0; i < 1; i++) {
     r.start = now;
-    r.flags = DISKSIM_READ;
+//    r.flags = DISKSIM_READ;
+    r.flags = DISKSIM_TRIM;
     r.devno = 0;
 
     /* NOTE: it is bad to use this internal disksim call from external... */
